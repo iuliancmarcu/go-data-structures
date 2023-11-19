@@ -9,42 +9,42 @@ import (
 
 const P = 0.75
 
-type Node[T cmp.Ordered] struct {
+type Node[K cmp.Ordered, T any] struct {
 	Value T
-	Next  []*Node[T]
+	Key   K
+	Next  []*Node[K, T]
 }
 
-func (n *Node[T]) String() string {
+func (n *Node[K, T]) String() string {
 	return fmt.Sprintf("[Node] level: %v value %v", n.Level(), n.Value)
 }
 
-func (n *Node[T]) Level() int {
+func (n *Node[K, T]) Level() int {
 	return len(n.Next) - 1
 }
 
-func flip_coin() bool {
+func should_grow() bool {
 	return rand.Float32() < P
 }
 
 func random_level() int {
 	level := 0
-	for flip_coin() {
+	for should_grow() {
 		level++
 	}
 	return level
 }
 
-type SkipList[T cmp.Ordered] struct {
-	Head *Node[T]
+type SkipList[K cmp.Ordered, T any] struct {
+	Head *Node[K, T]
 }
 
-func (l *SkipList[T]) Debug() {
+func (l *SkipList[K, T]) Debug() {
 	for level := l.Head.Level(); level >= 0; level-- {
 		current_node := l.Head
 		for current_node != nil {
 			if current_node.Level() >= level {
-				fmt.Print(current_node.Value)
-				fmt.Print("\t")
+				fmt.Print(current_node.Key, "\t")
 			} else {
 				fmt.Print("\t")
 			}
@@ -57,23 +57,23 @@ func (l *SkipList[T]) Debug() {
 	fmt.Println()
 }
 
-func (l *SkipList[T]) Insert(value T) {
+func (l *SkipList[K, T]) Insert(key K, value T) {
 	new_node_level := random_level()
 
 	// FIXME: Safeguard operation for uninitialized list
 	if l.Head == nil {
-		l.Head = &Node[T]{Next: make([]*Node[T], new_node_level+1)}
+		l.Head = &Node[K, T]{Next: make([]*Node[K, T], new_node_level+1)}
 	}
 
 	max_level := int(math.Max(float64(l.Head.Level()), float64(new_node_level)))
 
 	current_node := l.Head
-	nodes_to_update := make([]*Node[T], max_level+1) // <-- +1 because we need cap() to include index 0
+	nodes_to_update := make([]*Node[K, T], max_level+1) // <-- +1 because we need cap() to include index 0
 
 	// For each level from list Head top-most
 	for level := l.Head.Level(); level >= 0; level-- {
 		// Move right as much as possible
-		for current_node.Next[level] != nil && current_node.Next[level].Value <= value {
+		for current_node.Next[level] != nil && current_node.Next[level].Key <= key {
 			current_node = current_node.Next[level]
 		}
 
@@ -82,7 +82,7 @@ func (l *SkipList[T]) Insert(value T) {
 	}
 
 	// Create a new node
-	node_to_insert := &Node[T]{Value: value, Next: make([]*Node[T], new_node_level+1)} // <-- +1 because we need cap() to include index 0
+	node_to_insert := &Node[K, T]{Key: key, Value: value, Next: make([]*Node[K, T], new_node_level+1)} // <-- +1 because we need cap() to include index 0
 
 	// Mark for update higher levels of Head if necessary
 	if l.Head.Level() < new_node_level {
@@ -91,7 +91,7 @@ func (l *SkipList[T]) Insert(value T) {
 		}
 
 		// And expand the Head Next slice
-		l.Head.Next = append(make([]*Node[T], 0, max_level+1), l.Head.Next...)
+		l.Head.Next = append(make([]*Node[K, T], 0, max_level+1), l.Head.Next...)
 	}
 
 	// Insert the node by updating the links
@@ -104,19 +104,19 @@ func (l *SkipList[T]) Insert(value T) {
 	}
 }
 
-func (l *SkipList[T]) Delete(value T) bool {
+func (l *SkipList[K, T]) Delete(key K) bool {
 	// FIXME: Safeguard operation for uninitialized list
 	if l.Head == nil {
 		return false
 	}
 
 	current_node := l.Head
-	nodes_to_update := make([]*Node[T], l.Head.Level()+1)
+	nodes_to_update := make([]*Node[K, T], l.Head.Level()+1)
 
 	// For each level from top-most
 	for level := l.Head.Level(); level >= 0; level-- {
 		// Move right as much as possible
-		for current_node.Next[level] != nil && current_node.Next[level].Value < value {
+		for current_node.Next[level] != nil && current_node.Next[level].Key < key {
 			current_node = current_node.Next[level]
 		}
 
@@ -126,7 +126,7 @@ func (l *SkipList[T]) Delete(value T) bool {
 
 	// Next node has to be be the node containing the value
 	node_to_delete := current_node.Next[0]
-	if node_to_delete.Value != value {
+	if node_to_delete.Key != key {
 		return false
 	}
 
@@ -155,10 +155,10 @@ func (l *SkipList[T]) Delete(value T) bool {
 	return true
 }
 
-func (l *SkipList[T]) Has(value T) bool {
+func (l *SkipList[K, T]) Find(key K) *T {
 	// FIXME: Safeguard operation for uninitialized list
 	if l.Head == nil {
-		return false
+		return nil
 	}
 
 	current_node := l.Head
@@ -166,14 +166,14 @@ func (l *SkipList[T]) Has(value T) bool {
 	// For each level from top-most
 	for level := l.Head.Level(); level >= 0; level-- {
 		// Move right as much as possible
-		for current_node.Next[level] != nil && current_node.Next[level].Value <= value {
+		for current_node.Next[level] != nil && current_node.Next[level].Key <= key {
 			current_node = current_node.Next[level]
 		}
 
-		if current_node.Value == value {
-			return true
+		if current_node.Key == key {
+			return &current_node.Value
 		}
 	}
 
-	return false
+	return nil
 }
